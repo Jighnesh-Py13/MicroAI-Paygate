@@ -40,8 +40,12 @@ Environment variables (via `.env`):
 **Optional:**
 - `OPENROUTER_MODEL` — model name, default `z-ai/glm-4.5-air:free`
 - `VERIFIER_URL` — override verifier endpoint, default `http://127.0.0.1:3002`
+- `ALLOWED_ORIGINS` — comma-separated CORS allowed origins, default `http://localhost:3001`; values must be origins only, with no path/query/fragment
 - `RECIPIENT_ADDRESS` — payment recipient; falls back to default if unset
 - `CHAIN_ID` — chain id used in EIP-712 domain; default `8453`
+- `RECEIPT_STORE` — receipt storage backend, `redis` by default or `memory` for tests/local experiments
+- `RECEIPT_TTL` — receipt TTL in seconds, default `86400`
+- `REDIS_URL` — required when `CACHE_ENABLED=true` or `RECEIPT_STORE=redis`; use `redis:6379` in Compose and `localhost:6379` locally
 
 **Rate Limiting:**
 - `RATE_LIMIT_ENABLED` — enable/disable rate limiting (default: true)

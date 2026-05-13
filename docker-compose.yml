@@ -9,7 +9,9 @@ services:
       - PORT=3000
       - VERIFIER_URL=http://verifier:3002
       - REDIS_URL=redis:6379
-      - CACHE_ENABLED=true
+      - CACHE_ENABLED=${CACHE_ENABLED:-false}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3001}
+      - RECEIPT_STORE=${RECEIPT_STORE:-redis}
       # Pass through from .env file
       - OPENROUTER_API_KEY
       - OPENROUTER_MODEL
@@ -21,8 +23,10 @@ services:
       - REDIS_DB
       - CACHE_TTL_SECONDS
     depends_on:
-      - verifier
-      - redis
+      verifier:
+        condition: service_started
+      redis:
+        condition: service_healthy
     networks:
       - microai-net
 
@@ -41,7 +45,13 @@ services:
       - microai-net
     volumes:
       - redis-data:/data
-    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy noeviction
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
     deploy:
       resources:
         limits:

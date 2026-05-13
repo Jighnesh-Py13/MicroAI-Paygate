@@ -27,6 +27,8 @@ VERIFIER_PID=$!
 
 echo "Starting Gateway..."
 cd "$SCRIPT_DIR/gateway"
+export RECEIPT_STORE="${RECEIPT_STORE:-memory}"
+export CACHE_ENABLED="${CACHE_ENABLED:-false}"
 go run . &
 GATEWAY_PID=$!
 

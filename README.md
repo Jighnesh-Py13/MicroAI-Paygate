@@ -48,17 +48,16 @@ MicroAI Paygate is designed to be frictionless and trustless:
 3.  **Polyglot Performance**: We use the right tool for the job—Go for I/O bound routing, Rust for CPU-bound cryptography, and TypeScript for UI.
 4.  **Standard Compliance**: Fully compliant with EIP-712, ensuring users know exactly what they are signing.
 
-## Performance Benchmarks
+## Measured Verifier Benchmark
 
-The migration to a polyglot microservices architecture resulted in significant performance improvements across key metrics.
+The reproducible verifier micro-benchmark lives in [`bench/`](bench/README.md) and measures only the Rust `/verify` endpoint. It does not measure gateway, wallet UI, Redis, OpenRouter, or end-to-end x402 latency.
 
-| Metric | Monolithic Stack (Node.js) | Microservices Stack (Go/Rust) | Improvement |
-| :--- | :--- | :--- | :--- |
-| **Request Latency (P99)** | 120ms | 15ms | **8x Faster** |
-| **Verification Time** | 45ms | 2ms | **22x Faster** |
-| **Concurrent Connections** | ~3,000 | ~50,000+ | **16x Scale** |
-| **Memory Footprint** | 150MB | 25MB (Combined) | **6x More Efficient** |
-| **Cold Start** | 1.5s | <100ms | **Instant** |
+Latest local run: `bench/RESULTS-2026-05-13.txt` on Apple M2, 8 cores, 8GB RAM with `wrk 4.2.0`, 2 threads, 32 connections, 30 seconds, and 1000 rotated signed payloads.
+
+| Metric | Result |
+| :--- | :--- |
+| Requests/sec | 1526.94 |
+| p99 latency | 85.45ms |
 
 ## Architecture & Backend Internals
 
@@ -124,7 +123,7 @@ graph TD
 
     subgraph Storage
         L --> M[(Redis Cache)]
-        L --> N[(In-memory Receipt Map)]
+        L --> N[(Redis Receipt Store)]
     end
 
     %% Component Styling
@@ -193,15 +192,14 @@ The Verifier is a specialized computation unit designed for one task: Elliptic C
 
 This section exists because every honest project has rough edges, and pretending otherwise is the fastest way to lose credibility in a code review. These are the things I know are imperfect today:
 
-- **Receipts are stored in an in-memory map**, not in Redis. The gateway already has Redis wired for the cache layer, so this is small to fix — but as-shipped, restarting the gateway loses all outstanding receipts and a second gateway replica can't see receipts issued by the first. Single-instance only.
+- **Receipts now default to Redis-backed storage** (`RECEIPT_STORE=redis`) with the same TTL used by the receipt lookup API. `RECEIPT_STORE=memory` is still available for tests and local experiments, but memory mode loses receipts on restart and should not be used for multi-replica deployments.
 - **A valid signature is not a settled payment.** The verifier proves the signer authorized the payment context; it does not check that USDC actually moved on Base. A production deployment would either (a) require pre-paid balances tracked off-chain, (b) poll an indexer for on-chain settlement before fulfilling, or (c) accept the float risk for tiny micropayments. This system does (c) implicitly, which is acceptable for a demo but not for real money at scale.
 - **Single-chain hardcoded to Base / Base Sepolia.** Multi-chain support would require dynamic EIP-712 domains and per-chain recipient/token configs. Not difficult, just not done.
 - **Replay protection relies on a 5-minute timestamp window**, not a persistent nonce store. Inside the window, the same `(signature, nonce, timestamp)` triple is technically reusable. A nonce-set in Redis would close this gap; the timestamp window is a deliberate "good enough for low-value demo traffic" choice.
 - **Rate limiter is per-process and in-memory.** Horizontal scaling of the gateway would silently weaken the limits, since each replica has its own token buckets. Distributed rate limiting (e.g., Redis-backed sliding window) is a known follow-up.
-- **CORS allowed origins are hardcoded** to `http://localhost:3001` in `gateway/main.go`. Deploying the frontend anywhere else requires patching this. An `ALLOWED_ORIGINS` env var is the planned fix.
 - **Demo runs against free OpenRouter models** (`z-ai/glm-4.5-air:free`). Summaries are mediocre by design — this is a deliberate cost tradeoff to keep the public demo at zero recurring spend.
 
-If you find more, open an issue — but note that PR reviews are paused for the current placement season and will resume after.
+If you find more, open an issue.
 
 ## Installation & Deployment
 
@@ -234,6 +232,7 @@ Copy `.env.example` to `.env` and fill values (see next section).
 ```bash
 bun run stack
 ```
+This local command runs the gateway with `RECEIPT_STORE=memory` and `CACHE_ENABLED=false` unless you override those variables, so the documented quick-start path does not require Redis. Use Docker Compose or set `RECEIPT_STORE=redis REDIS_URL=localhost:6379` when you want to exercise Redis-backed receipts locally.
 
 **Run Tests**
 ```bash
@@ -373,11 +372,17 @@ REDIS_URL=redis:6379
 REDIS_PASSWORD=
 REDIS_DB=0
 
-# Cache Settings
-CACHE_ENABLED=true
+# Receipt storage uses Redis by default so receipts survive gateway restarts.
+RECEIPT_STORE=redis
+
+# Optional cache settings. Disabled by default so cache writes cannot exhaust
+# the Redis instance used for receipts.
+CACHE_ENABLED=false
 # Time-to-live for cached items in seconds (default: 3600 = 1 hour)
 CACHE_TTL_SECONDS=3600
 ```
+
+The Compose Redis service uses `--maxmemory-policy noeviction` so Redis will not evict `receipt:{id}` keys before `RECEIPT_TTL`. Response caching is off by default in Compose because cache and receipts share that Redis instance; enable `CACHE_ENABLED=true` only when you have dedicated cache capacity or accept that cache pressure can block new receipt writes.
 
 ### Docker Deployment (Production)
 
@@ -432,8 +437,8 @@ The E2E tests simulate a real client interaction:
 ```bash
 bun run test:e2e
 ```
-Prerequisites: Bun, Go, and Rust toolchains installed. This command uses `run_e2e.sh` to build and start the Go Gateway and Rust Verifier before executing tests.
-If `OPENROUTER_API_KEY` is missing, the signature path will pass but the final AI call may return 500 after verification.
+Prerequisites: Bun, Go, and Rust toolchains installed. This command uses `run_e2e.sh` to build and start the Go Gateway and Rust Verifier before executing tests. The helper sets `RECEIPT_STORE=memory` and `CACHE_ENABLED=false` by default, so E2E does not require Redis unless you override those environment variables.
+The default OpenRouter path still needs `OPENROUTER_API_KEY` for gateway startup; CI skips E2E when the secret is absent. With an invalid key, the signed path may return 500 after verification.
 
 ### Unit Tests
 
@@ -465,37 +470,15 @@ cargo test
 
 ## Receipt Verification
 
-MicroAI Paygate issues cryptographic receipts for every successful API request. These receipts are tamper-proof, independently verifiable, and stored for 24 hours by default.
+MicroAI Paygate issues cryptographic receipts for every successful API request. These receipts are tamper-proof, independently verifiable, and stored in Redis for 24 hours by default.
 
 ### Receipt Structure
 
-Every successful request returns a receipt in the response body and `X-402-Receipt` header:
+Every successful request returns the AI result in the JSON body and a base64-encoded signed receipt in the `X-402-Receipt` header:
 
 ```json
 {
-  "result": "AI summary...",
-  "receipt": {
-    "receipt": {
-      "id": "rcpt_a1b2c3d4e5f6",
-      "version": "1.0",
-      "timestamp": "2026-01-06T10:30:00Z",
-      "payment": {
-        "payer": "0x742d35Cc...",
-        "recipient": "0x2cAF48b4...",
-        "amount": "0.001",
-        "token": "USDC",
-        "chainId": 8453,
-        "nonce": "9c311e31-..."
-      },
-      "service": {
-        "endpoint": "/api/ai/summarize",
-        "request_hash": "sha256:abc123...",
-        "response_hash": "sha256:def456..."
-      }
-    },
-    "signature": "0x1234...",
-    "server_public_key": "0xabcd..."
-  }
+  "result": "AI summary..."
 }
 ```
 
@@ -517,17 +500,22 @@ const response = await fetch('/api/ai/summarize', {
   body: JSON.stringify({ text: 'Your text here' }),
 });
 
-const data = await response.json();
+const receiptHeader = response.headers.get('X-402-Receipt');
+const signedReceipt = receiptHeader
+  ? JSON.parse(atob(receiptHeader))
+  : null;
 
 // Verify the receipt signature
-const isValid = await verifyReceipt(data.receipt);
+const isValid = signedReceipt ? await verifyReceipt(signedReceipt) : false;
 console.log(`Receipt valid: ${isValid}`); // true
 
 // Store receipt for future reference
-localStorage.setItem(
-  `receipt_${data.receipt.receipt.id}`, 
-  JSON.stringify(data.receipt)
-);
+if (signedReceipt) {
+  localStorage.setItem(
+    `receipt_${signedReceipt.receipt.id}`,
+    JSON.stringify(signedReceipt)
+  );
+}
 ```
 
 ### Receipt Lookup API
@@ -595,6 +583,9 @@ SERVER_WALLET_PRIVATE_KEY=your_private_key_hex
 
 # Optional: Receipt TTL in seconds (default: 86400 = 24 hours)
 RECEIPT_TTL=86400
+
+# Optional: "redis" survives restarts; "memory" is for tests/local experiments
+RECEIPT_STORE=redis
 ```
 
 ## API Reference
@@ -649,4 +640,3 @@ We welcome contributions! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for gui
 ## License
 
 This project is licensed under the [MIT License](LICENSE).
-
