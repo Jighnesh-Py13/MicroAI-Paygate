@@ -11,6 +11,7 @@ func TestValidateConfig_MissingRequiredEnv(t *testing.T) {
 	t.Setenv("OPENROUTER_API_KEY", "")
 	t.Setenv("SERVER_WALLET_PRIVATE_KEY", "")
 	t.Setenv("CACHE_ENABLED", "false")
+	t.Setenv("RECEIPT_STORE", "memory")
 
 	err := validateConfig()
 	if err == nil {
@@ -30,6 +31,7 @@ func TestValidateConfig_WithRequiredEnv(t *testing.T) {
 	t.Setenv("OPENROUTER_API_KEY", "test-key")
 	t.Setenv("SERVER_WALLET_PRIVATE_KEY", "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
 	t.Setenv("CACHE_ENABLED", "false")
+	t.Setenv("RECEIPT_STORE", "memory")
 	t.Setenv("RECIPIENT_ADDRESS", "0x2cAF48b4BA1C58721a85dFADa5aC01C2DFa62219")
 
 	err := validateConfig()
@@ -42,6 +44,7 @@ func TestValidateConfig_CacheEnabledRequiresRedis(t *testing.T) {
 	t.Setenv("OPENROUTER_API_KEY", "test-key")
 	t.Setenv("SERVER_WALLET_PRIVATE_KEY", "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
 	t.Setenv("CACHE_ENABLED", "true")
+	t.Setenv("RECEIPT_STORE", "memory")
 	t.Setenv("REDIS_URL", "")
 	t.Setenv("RECIPIENT_ADDRESS", "0x2cAF48b4BA1C58721a85dFADa5aC01C2DFa62219")
 
@@ -59,12 +62,73 @@ func TestValidateConfig_CacheEnabledWithValidRedis(t *testing.T) {
 	t.Setenv("OPENROUTER_API_KEY", "test-key")
 	t.Setenv("SERVER_WALLET_PRIVATE_KEY", "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
 	t.Setenv("CACHE_ENABLED", "true")
+	t.Setenv("RECEIPT_STORE", "memory")
 	t.Setenv("REDIS_URL", "localhost:6379")
 	t.Setenv("RECIPIENT_ADDRESS", "0x2cAF48b4BA1C58721a85dFADa5aC01C2DFa62219")
 
 	err := validateConfig()
 	if err != nil {
 		t.Fatalf("expected no error when all required vars are set, got: %v", err)
+	}
+}
+
+func TestValidateConfig_DefaultReceiptStoreRequiresRedis(t *testing.T) {
+	t.Setenv("OPENROUTER_API_KEY", "test-key")
+	t.Setenv("SERVER_WALLET_PRIVATE_KEY", "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+	t.Setenv("CACHE_ENABLED", "false")
+	t.Setenv("RECEIPT_STORE", "")
+	t.Setenv("REDIS_URL", "")
+	t.Setenv("RECIPIENT_ADDRESS", "0x2cAF48b4BA1C58721a85dFADa5aC01C2DFa62219")
+
+	err := validateConfig()
+	if err == nil {
+		t.Fatal("expected error when default redis receipt store has no REDIS_URL")
+	}
+	if !strings.Contains(err.Error(), "REDIS_URL") {
+		t.Fatalf("expected error to mention REDIS_URL, got: %v", err)
+	}
+}
+
+func TestValidateConfig_MemoryReceiptStoreDoesNotRequireRedis(t *testing.T) {
+	t.Setenv("OPENROUTER_API_KEY", "test-key")
+	t.Setenv("SERVER_WALLET_PRIVATE_KEY", "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+	t.Setenv("CACHE_ENABLED", "false")
+	t.Setenv("RECEIPT_STORE", "memory")
+	t.Setenv("REDIS_URL", "")
+	t.Setenv("RECIPIENT_ADDRESS", "0x2cAF48b4BA1C58721a85dFADa5aC01C2DFa62219")
+
+	err := validateConfig()
+	if err != nil {
+		t.Fatalf("expected memory receipt store to allow missing Redis, got: %v", err)
+	}
+}
+
+func TestValidateConfig_InvalidReceiptStoreMode(t *testing.T) {
+	t.Setenv("OPENROUTER_API_KEY", "test-key")
+	t.Setenv("SERVER_WALLET_PRIVATE_KEY", "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+	t.Setenv("CACHE_ENABLED", "false")
+	t.Setenv("RECEIPT_STORE", "postgres")
+	t.Setenv("REDIS_URL", "localhost:6379")
+	t.Setenv("RECIPIENT_ADDRESS", "0x2cAF48b4BA1C58721a85dFADa5aC01C2DFa62219")
+
+	err := validateConfig()
+	if err == nil {
+		t.Fatal("expected invalid RECEIPT_STORE mode to fail validation")
+	}
+	if !strings.Contains(err.Error(), "RECEIPT_STORE") {
+		t.Fatalf("expected error to mention RECEIPT_STORE, got: %v", err)
+	}
+}
+
+func TestGetReceiptStoreMode(t *testing.T) {
+	t.Setenv("RECEIPT_STORE", "")
+	if got := getReceiptStoreMode(); got != "redis" {
+		t.Fatalf("expected default receipt store mode redis, got %q", got)
+	}
+
+	t.Setenv("RECEIPT_STORE", " memory ")
+	if got := getReceiptStoreMode(); got != "memory" {
+		t.Fatalf("expected trimmed receipt store mode memory, got %q", got)
 	}
 }
 
@@ -163,7 +227,7 @@ func TestValidateRedisURL(t *testing.T) {
 			name:    "empty URL",
 			url:     "",
 			wantErr: true,
-			errMsg:  "REDIS_URL not set but CACHE_ENABLED=true",
+			errMsg:  "REDIS_URL not set",
 		},
 		{
 			name:    "invalid host:port format",

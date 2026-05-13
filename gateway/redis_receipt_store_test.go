@@ -6,18 +6,17 @@ import (
 	"testing"
 	"time"
 
+	"github.com/alicebob/miniredis/v2"
 	"github.com/redis/go-redis/v9"
 )
 
 func TestRedisReceiptStore_StoreGetAndTTL(t *testing.T) {
 	ctx := context.Background()
-	rdb := redis.NewClient(&redis.Options{Addr: "127.0.0.1:6379"})
+	redisServer := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: redisServer.Addr()})
 	t.Cleanup(func() {
 		_ = rdb.Close()
 	})
-	if err := rdb.Ping(ctx).Err(); err != nil {
-		t.Skipf("Redis unavailable, skipping integration test: %v", err)
-	}
 
 	store, err := NewRedisReceiptStore(rdb)
 	if err != nil {
@@ -65,7 +64,7 @@ func TestRedisReceiptStore_StoreGetAndTTL(t *testing.T) {
 		t.Fatalf("signature mismatch: got %q, want %q", got.Signature, receipt.Signature)
 	}
 
-	time.Sleep(200 * time.Millisecond)
+	redisServer.FastForward(200 * time.Millisecond)
 	_, exists, err = store.Get(ctx, receipt.Receipt.ID)
 	if err != nil {
 		t.Fatalf("get expired receipt: %v", err)

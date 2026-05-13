@@ -11,6 +11,7 @@ services:
       - REDIS_URL=redis:6379
       - CACHE_ENABLED=true
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3001}
+      - RECEIPT_STORE=${RECEIPT_STORE:-redis}
       # Pass through from .env file
       - OPENROUTER_API_KEY
       - OPENROUTER_MODEL

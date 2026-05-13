@@ -5,6 +5,7 @@ go 1.24.0
 toolchain go1.24.13
 
 require (
+	github.com/alicebob/miniredis/v2 v2.38.0
 	github.com/ethereum/go-ethereum v1.16.8
 	github.com/gin-contrib/cors v1.7.6
 	github.com/gin-contrib/gzip v1.2.5
@@ -45,6 +46,7 @@ require (
 	github.com/quic-go/quic-go v0.57.0 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/ugorji/go/codec v1.3.0 // indirect
+	github.com/yuin/gopher-lua v1.1.1 // indirect
 	golang.org/x/arch v0.22.0 // indirect
 	golang.org/x/crypto v0.45.0 // indirect
 	golang.org/x/net v0.47.0 // indirect

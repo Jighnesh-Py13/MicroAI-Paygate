@@ -70,8 +70,12 @@ func validateConfig() error {
 		required = append(required, "OPENROUTER_API_KEY")
 	}
 
-	// Add REDIS_URL to required if caching is enabled
-	if getCacheEnabled() {
+	if err := validateReceiptStoreMode(); err != nil {
+		return err
+	}
+
+	// Add REDIS_URL to required if caching or Redis-backed receipts are enabled.
+	if isRedisRequired() {
 		required = append(required, "REDIS_URL")
 	}
 
@@ -92,8 +96,8 @@ func validateConfig() error {
 		return fmt.Errorf("SERVER_WALLET_PRIVATE_KEY validation failed: %w", err)
 	}
 
-	// Validate REDIS_URL format if caching is enabled
-	if getCacheEnabled() {
+	// Validate REDIS_URL format if Redis is required.
+	if isRedisRequired() {
 		if err := validateRedisURL(); err != nil {
 			return fmt.Errorf("REDIS_URL validation failed: %w", err)
 		}
@@ -137,7 +141,7 @@ func validateServerPrivateKey() error {
 func validateRedisURL() error {
 	redisURL := os.Getenv("REDIS_URL")
 	if redisURL == "" {
-		return fmt.Errorf("REDIS_URL not set but CACHE_ENABLED=true")
+		return fmt.Errorf("REDIS_URL not set but Redis is required")
 	}
 
 	// Handle redis:// or rediss:// schemes
@@ -252,7 +256,12 @@ func main() {
 	r.Use(gzip.Gzip(gzip.DefaultCompression, gzip.WithExcludedPaths([]string{"/metrics"})))
 
 	// Initialize Redis early to fail-fast if Redis required but unavailable
-	initRedis()
+	if err := initRedis(); err != nil {
+		log.Fatalf("Redis initialization failed: %v", err)
+	}
+	if err := initReceiptStore(); err != nil {
+		log.Fatalf("Receipt store initialization failed: %v", err)
+	}
 
 	r.StaticFile("/openapi.yaml", "openapi.yaml")
 
@@ -558,7 +567,7 @@ func generateAndSendReceipt(c *gin.Context, paymentCtx PaymentContext, recovered
 		return err
 	}
 
-	if err := storeReceipt(receipt, getReceiptTTL()); err != nil {
+	if err := storeReceiptWithContext(c.Request.Context(), receipt, getReceiptTTL()); err != nil {
 		c.JSON(500, gin.H{"error": "Failed to store receipt"})
 		return err
 	}
@@ -848,7 +857,12 @@ func getReceiptTTL() time.Duration {
 func handleGetReceipt(c *gin.Context) {
 	id := c.Param("id")
 
-	receipt, exists := getReceipt(id)
+	receipt, exists, err := getReceiptWithContext(c.Request.Context(), id)
+	if err != nil {
+		log.Printf("Failed to retrieve receipt %s: %v", id, err)
+		c.JSON(500, gin.H{"error": "Failed to retrieve receipt"})
+		return
+	}
 	if !exists {
 		c.JSON(404, gin.H{
 			"error":   "Receipt not found",
@@ -947,9 +961,9 @@ func handleReadyz(c *gin.Context) {
 	openRouterStatus := checkOpenRouterHealth()
 	checks["openrouter"] = openRouterStatus
 
-	//3. Check Redis connectivity (if caching is enabled)
+	//3. Check Redis connectivity (if caching or Redis-backed receipts are enabled)
 	redisStatus := "disabled"
-	if getCacheEnabled() {
+	if isRedisRequired() {
 		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 		defer cancel()
 
@@ -973,9 +987,9 @@ func handleReadyz(c *gin.Context) {
 		"status":          "ok",
 	}
 
-	//Overall status logic - include Redis if caching is enabled
+	//Overall status logic - include Redis if caching or Redis-backed receipts are enabled
 	ready := verifierStatus == "ok" && openRouterStatus == "ok"
-	if getCacheEnabled() {
+	if isRedisRequired() {
 		ready = ready && redisStatus == "ok"
 	}
 

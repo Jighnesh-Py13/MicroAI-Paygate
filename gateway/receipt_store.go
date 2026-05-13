@@ -116,6 +116,27 @@ func setActiveReceiptStore(store ReceiptStore) {
 	activeReceiptStore = store
 }
 
+func initReceiptStore() error {
+	var store ReceiptStore
+	var err error
+
+	switch getReceiptStoreMode() {
+	case receiptStoreModeMemory:
+		store = NewInMemoryReceiptStore()
+	case receiptStoreModeRedis:
+		store, err = NewRedisReceiptStore(redisClient)
+	default:
+		return fmt.Errorf("unsupported receipt store mode %q", getReceiptStoreMode())
+	}
+	if err != nil {
+		return err
+	}
+
+	setActiveReceiptStore(store)
+	log.Printf("Receipt store initialized: %s", getReceiptStoreMode())
+	return nil
+}
+
 // startReceiptCleanup runs periodic cleanup in a single goroutine.
 func startReceiptCleanup(ctx context.Context) {
 	ticker := time.NewTicker(receiptCleanupInterval)

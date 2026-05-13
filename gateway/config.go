@@ -1,12 +1,18 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"strings"
 	"time"
 )
 
 var defaultAllowedOrigins = []string{"http://localhost:3001"}
+
+const (
+	receiptStoreModeRedis  = "redis"
+	receiptStoreModeMemory = "memory"
+)
 
 func getAllowedOrigins() []string {
 	raw := strings.TrimSpace(os.Getenv("ALLOWED_ORIGINS"))
@@ -26,6 +32,27 @@ func getAllowedOrigins() []string {
 	}
 
 	return origins
+}
+
+func getReceiptStoreMode() string {
+	mode := strings.ToLower(strings.TrimSpace(os.Getenv("RECEIPT_STORE")))
+	if mode == "" {
+		return receiptStoreModeRedis
+	}
+	return mode
+}
+
+func validateReceiptStoreMode() error {
+	switch getReceiptStoreMode() {
+	case receiptStoreModeRedis, receiptStoreModeMemory:
+		return nil
+	default:
+		return fmt.Errorf("RECEIPT_STORE must be %q or %q", receiptStoreModeRedis, receiptStoreModeMemory)
+	}
+}
+
+func isRedisRequired() bool {
+	return getCacheEnabled() || getReceiptStoreMode() == receiptStoreModeRedis
 }
 
 // getPositiveTimeout returns the configured timeout in seconds, but ensures a

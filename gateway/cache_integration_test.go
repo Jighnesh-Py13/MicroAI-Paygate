@@ -65,6 +65,7 @@ func TestCacheIntegration_FullFlow(t *testing.T) {
 
 	// Set Env Vars using t.Setenv for auto-cleanup
 	t.Setenv("CACHE_ENABLED", "true")
+	t.Setenv("RECEIPT_STORE", "memory")
 	t.Setenv("REDIS_URL", "127.0.0.1:6379")
 	t.Setenv("VERIFIER_URL", verifier.URL)
 	t.Setenv("AI_PROVIDER", "openrouter")
@@ -74,7 +75,9 @@ func TestCacheIntegration_FullFlow(t *testing.T) {
 	t.Setenv("RECIPIENT_ADDRESS", "0xTestRecipient")
 
 	// 4. Initialize Gateway logic
-	initRedis()
+	if err := initRedis(); err != nil {
+		t.Fatalf("Failed to initialize Redis: %v", err)
+	}
 	defer func() {
 		if redisClient != nil {
 			redisClient.Close()
