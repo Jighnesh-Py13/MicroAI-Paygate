@@ -23,8 +23,10 @@ services:
       - REDIS_DB
       - CACHE_TTL_SECONDS
     depends_on:
-      - verifier
-      - redis
+      verifier:
+        condition: service_started
+      redis:
+        condition: service_healthy
     networks:
       - microai-net
 
@@ -43,7 +45,13 @@ services:
       - microai-net
     volumes:
       - redis-data:/data
-    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy noeviction
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
     deploy:
       resources:
         limits:

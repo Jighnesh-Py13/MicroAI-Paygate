@@ -24,6 +24,9 @@ func (s *RedisReceiptStore) Store(ctx context.Context, receipt *SignedReceipt, t
 	if err := validateReceipt(receipt); err != nil {
 		return fmt.Errorf("invalid receipt format: %w", err)
 	}
+	if err := validateReceiptTTL(ttl); err != nil {
+		return err
+	}
 
 	data, err := json.Marshal(receipt)
 	if err != nil {

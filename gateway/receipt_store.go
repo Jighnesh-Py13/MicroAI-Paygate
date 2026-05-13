@@ -39,6 +39,9 @@ func (s *InMemoryReceiptStore) Store(ctx context.Context, receipt *SignedReceipt
 	if err := validateReceipt(receipt); err != nil {
 		return fmt.Errorf("invalid receipt format: %w", err)
 	}
+	if err := validateReceiptTTL(ttl); err != nil {
+		return err
+	}
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -101,6 +104,13 @@ func (s *InMemoryReceiptStore) CleanupExpired(ctx context.Context) error {
 }
 
 func (s *InMemoryReceiptStore) Close() error {
+	return nil
+}
+
+func validateReceiptTTL(ttl time.Duration) error {
+	if ttl <= 0 {
+		return fmt.Errorf("receipt ttl must be positive")
+	}
 	return nil
 }
 

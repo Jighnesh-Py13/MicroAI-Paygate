@@ -13,7 +13,7 @@ Thanks for considering a contribution! This project is open to issues, bug fixes
 - Run unit tests:
   - Gateway: `cd gateway && go test -v`
   - Verifier: `cd verifier && cargo test`
-- Run E2E tests: `bun run test:e2e` (auto-starts gateway/verifier)
+- Run E2E tests: `bun run test:e2e` (auto-starts gateway/verifier with memory receipts and cache disabled unless overridden)
 - Keep ports 3000/3001/3002 free when running locally.
 
 ## Pull Request Checklist
@@ -26,7 +26,7 @@ Thanks for considering a contribution! This project is open to issues, bug fixes
 - Gateway: `go test -v ./...` and `go vet ./...`
 - Verifier: `cargo fmt -- --check`, `cargo clippy -- -D warnings`, `cargo test`
 - Web: `cd web && bun run lint && bun run build`
-- E2E (optional): `bun run test:e2e` (requires `OPENROUTER_API_KEY`)
+- E2E (optional): `bun run test:e2e` (requires `OPENROUTER_API_KEY`; Redis is not required with the default helper settings)
 
 ## Coding Standards
 - Keep changes minimal and focused; avoid large, unrelated refactors.

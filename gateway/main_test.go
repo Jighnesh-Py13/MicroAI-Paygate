@@ -376,6 +376,7 @@ func TestHandleHealthz(t *testing.T) {
 func TestHandleReadyz_Healthy(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	t.Setenv("RECEIPT_STORE", "memory")
+	t.Setenv("CACHE_ENABLED", "false")
 
 	// save originals
 	origVerifier := checkVerifierHealth
@@ -419,6 +420,7 @@ func TestHandleReadyz_Healthy(t *testing.T) {
 func TestHandleReadyz_UnHealthy(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	t.Setenv("RECEIPT_STORE", "memory")
+	t.Setenv("CACHE_ENABLED", "false")
 
 	origVerifier := checkVerifierHealth
 	origOpenRouter := checkOpenRouterHealth

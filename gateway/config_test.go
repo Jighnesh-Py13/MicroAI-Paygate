@@ -354,6 +354,16 @@ func TestGetAllowedOrigins(t *testing.T) {
 			env:  stringPtr(" , ,, "),
 			want: []string{"http://localhost:3001"},
 		},
+		{
+			name: "invalid origin entries are ignored",
+			env:  stringPtr("ftp://app.example.com,https://app.example.com/path,https://admin.example.com"),
+			want: []string{"https://admin.example.com"},
+		},
+		{
+			name: "all invalid origin entries fall back to localhost",
+			env:  stringPtr("*,javascript:alert(1),https://app.example.com/?debug=true"),
+			want: []string{"http://localhost:3001"},
+		},
 	}
 
 	for _, tt := range tests {
@@ -386,6 +396,36 @@ func TestGetAllowedOrigins(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestGetReceiptTTL(t *testing.T) {
+	t.Run("default", func(t *testing.T) {
+		t.Setenv("RECEIPT_TTL", "")
+		if got := getReceiptTTL(); got != 24*time.Hour {
+			t.Fatalf("expected default receipt TTL 24h, got %v", got)
+		}
+	})
+
+	t.Run("custom positive", func(t *testing.T) {
+		t.Setenv("RECEIPT_TTL", "120")
+		if got := getReceiptTTL(); got != 2*time.Minute {
+			t.Fatalf("expected custom receipt TTL 2m, got %v", got)
+		}
+	})
+
+	t.Run("zero falls back to default", func(t *testing.T) {
+		t.Setenv("RECEIPT_TTL", "0")
+		if got := getReceiptTTL(); got != 24*time.Hour {
+			t.Fatalf("expected zero receipt TTL to fall back to 24h, got %v", got)
+		}
+	})
+
+	t.Run("negative falls back to default", func(t *testing.T) {
+		t.Setenv("RECEIPT_TTL", "-10")
+		if got := getReceiptTTL(); got != 24*time.Hour {
+			t.Fatalf("expected negative receipt TTL to fall back to 24h, got %v", got)
+		}
+	})
 }
 
 func stringPtr(value string) *string {

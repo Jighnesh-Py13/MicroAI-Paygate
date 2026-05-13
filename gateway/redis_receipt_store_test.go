@@ -74,6 +74,33 @@ func TestRedisReceiptStore_StoreGetAndTTL(t *testing.T) {
 	}
 }
 
+func TestRedisReceiptStore_RejectsNonPositiveTTL(t *testing.T) {
+	ctx := context.Background()
+	redisServer := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: redisServer.Addr()})
+	t.Cleanup(func() {
+		_ = rdb.Close()
+	})
+
+	store, err := NewRedisReceiptStore(rdb)
+	if err != nil {
+		t.Fatalf("new redis receipt store: %v", err)
+	}
+
+	receipt := validTestReceipt("rcpt_redis_ttl_zero")
+	if err := store.Store(ctx, receipt, 0); err == nil {
+		t.Fatal("expected non-positive TTL to be rejected")
+	}
+
+	exists, err := rdb.Exists(ctx, redisReceiptKey(receipt.Receipt.ID)).Result()
+	if err != nil {
+		t.Fatalf("check redis key existence: %v", err)
+	}
+	if exists != 0 {
+		t.Fatal("receipt with non-positive TTL should not be stored")
+	}
+}
+
 func validTestReceipt(id string) *SignedReceipt {
 	return &SignedReceipt{
 		Receipt: Receipt{

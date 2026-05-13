@@ -6,8 +6,8 @@ This directory contains End-to-End (E2E) tests for the MicroAI Paygate system.
 
 - [Bun](https://bun.sh) installed
 - The MicroAI Paygate stack running (`bun run stack` in the root directory)
- - Go toolchain (for gateway build in helper script)
- - Rust toolchain (for verifier build in helper script)
+- Go toolchain (for gateway build in helper script)
+- Rust toolchain (for verifier build in helper script)
 
 ## Running E2E Tests
 
@@ -30,8 +30,9 @@ Or manually:
    ```
 
 Notes:
-- If `OPENROUTER_API_KEY` is not set, signature verification will still pass, but the upstream AI call may return 500.
+- The default OpenRouter path requires `OPENROUTER_API_KEY` for gateway startup; CI skips E2E when the secret is absent. With an invalid key, the signed path may return 500 after verification.
 - The helper script expects ports 3000 and 3002 to be free; stop existing processes if needed.
+- The helper defaults to `RECEIPT_STORE=memory` and `CACHE_ENABLED=false`, so Redis is not required unless you override those environment variables.
 
 ## Other Tests
 

@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"log"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -23,8 +25,13 @@ func getAllowedOrigins() []string {
 	origins := make([]string, 0)
 	for _, entry := range strings.Split(raw, ",") {
 		origin := strings.TrimSpace(entry)
-		if origin != "" {
+		if origin == "" {
+			continue
+		}
+		if isValidAllowedOrigin(origin) {
 			origins = append(origins, origin)
+		} else {
+			log.Printf("Warning: ignoring invalid ALLOWED_ORIGINS entry: %q", origin)
 		}
 	}
 	if len(origins) == 0 {
@@ -32,6 +39,20 @@ func getAllowedOrigins() []string {
 	}
 
 	return origins
+}
+
+func isValidAllowedOrigin(origin string) bool {
+	parsed, err := url.Parse(origin)
+	if err != nil {
+		return false
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return false
+	}
+	if parsed.Host == "" || parsed.User != nil {
+		return false
+	}
+	return parsed.Path == "" && parsed.RawQuery == "" && parsed.Fragment == ""
 }
 
 func getReceiptStoreMode() string {

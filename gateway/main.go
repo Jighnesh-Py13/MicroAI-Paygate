@@ -850,6 +850,9 @@ func validateReceipt(receipt *SignedReceipt) error {
 // getReceiptTTL returns configured TTL or default 24h
 func getReceiptTTL() time.Duration {
 	ttlSeconds := getEnvAsInt("RECEIPT_TTL", 86400)
+	if ttlSeconds <= 0 {
+		ttlSeconds = 86400
+	}
 	return time.Duration(ttlSeconds) * time.Second
 }
 

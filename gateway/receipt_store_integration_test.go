@@ -114,9 +114,20 @@ func TestRedisReceiptStore_PersistsAcrossGatewayRestart(t *testing.T) {
 	if err := json.Unmarshal(lookupResp.Body.Bytes(), &lookup); err != nil {
 		t.Fatalf("unmarshal lookup response: %v", err)
 	}
-	receiptBody := lookup["receipt"].(map[string]any)
-	if receiptBody["id"] != created.Receipt.ID {
-		t.Fatalf("lookup receipt ID mismatch: got %v, want %s", receiptBody["id"], created.Receipt.ID)
+	receiptValue, ok := lookup["receipt"]
+	if !ok {
+		t.Fatalf("lookup response missing receipt field: %v", lookup)
+	}
+	receiptBody, ok := receiptValue.(map[string]any)
+	if !ok {
+		t.Fatalf("lookup receipt has unexpected type: %T", receiptValue)
+	}
+	receiptID, ok := receiptBody["id"].(string)
+	if !ok {
+		t.Fatalf("lookup receipt id has unexpected type: %T", receiptBody["id"])
+	}
+	if receiptID != created.Receipt.ID {
+		t.Fatalf("lookup receipt ID mismatch: got %v, want %s", receiptID, created.Receipt.ID)
 	}
 }
 
@@ -146,11 +157,13 @@ func replaceReceiptGlobalsForTest(t *testing.T) func() {
 	t.Helper()
 	origRedisClient := redisClient
 	origStore := getActiveReceiptStore()
+	origAIProvider := aiProvider
 	return func() {
 		if redisClient != nil && redisClient != origRedisClient {
 			_ = redisClient.Close()
 		}
 		redisClient = origRedisClient
 		setActiveReceiptStore(origStore)
+		aiProvider = origAIProvider
 	}
 }

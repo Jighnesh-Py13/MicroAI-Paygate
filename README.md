@@ -56,8 +56,8 @@ Latest local run: `bench/RESULTS-2026-05-13.txt` on Apple M2, 8 cores, 8GB RAM w
 
 | Metric | Result |
 | :--- | :--- |
-| Requests/sec | 1742.93 |
-| p99 latency | 42.61ms |
+| Requests/sec | 1359.61 |
+| p99 latency | 105.69ms |
 
 ## Architecture & Backend Internals
 
@@ -380,6 +380,8 @@ CACHE_ENABLED=true
 CACHE_TTL_SECONDS=3600
 ```
 
+The Compose Redis service uses `--maxmemory-policy noeviction` so cache pressure cannot evict `receipt:{id}` keys before `RECEIPT_TTL`. Under memory pressure, cache writes may fail closed while receipt lookups remain durable.
+
 ### Docker Deployment (Production)
 
 For production environments, we provide a containerized setup using Docker Compose. This orchestrates all three services in an isolated network.
@@ -433,8 +435,8 @@ The E2E tests simulate a real client interaction:
 ```bash
 bun run test:e2e
 ```
-Prerequisites: Bun, Go, and Rust toolchains installed. This command uses `run_e2e.sh` to build and start the Go Gateway and Rust Verifier before executing tests.
-If `OPENROUTER_API_KEY` is missing, the signature path will pass but the final AI call may return 500 after verification.
+Prerequisites: Bun, Go, and Rust toolchains installed. This command uses `run_e2e.sh` to build and start the Go Gateway and Rust Verifier before executing tests. The helper sets `RECEIPT_STORE=memory` and `CACHE_ENABLED=false` by default, so E2E does not require Redis unless you override those environment variables.
+The default OpenRouter path still needs `OPENROUTER_API_KEY` for gateway startup; CI skips E2E when the secret is absent. With an invalid key, the signed path may return 500 after verification.
 
 ### Unit Tests
 
