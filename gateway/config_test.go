@@ -1,6 +1,7 @@
 package main
 
 import (
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -256,4 +257,73 @@ func TestTimeoutConfigHelpers(t *testing.T) {
 	if getRequestTimeout() != 60*time.Second {
 		t.Fatalf("expected request timeout to fall back to 60s on non-positive value, got %v", getRequestTimeout())
 	}
+}
+
+func TestGetAllowedOrigins(t *testing.T) {
+	tests := []struct {
+		name string
+		env  *string
+		want []string
+	}{
+		{
+			name: "unset env returns localhost default",
+			env:  nil,
+			want: []string{"http://localhost:3001"},
+		},
+		{
+			name: "blank env returns localhost default",
+			env:  stringPtr("   "),
+			want: []string{"http://localhost:3001"},
+		},
+		{
+			name: "multi-origin env returns trimmed origins in order",
+			env:  stringPtr(" https://app.example.com,https://admin.example.com , http://localhost:3001 "),
+			want: []string{"https://app.example.com", "https://admin.example.com", "http://localhost:3001"},
+		},
+		{
+			name: "empty comma entries are ignored",
+			env:  stringPtr("https://app.example.com,, ,https://admin.example.com"),
+			want: []string{"https://app.example.com", "https://admin.example.com"},
+		},
+		{
+			name: "all empty comma entries fall back to localhost",
+			env:  stringPtr(" , ,, "),
+			want: []string{"http://localhost:3001"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.env == nil {
+				previous, hadPrevious := os.LookupEnv("ALLOWED_ORIGINS")
+				if err := os.Unsetenv("ALLOWED_ORIGINS"); err != nil {
+					t.Fatalf("failed to unset ALLOWED_ORIGINS: %v", err)
+				}
+				t.Cleanup(func() {
+					if hadPrevious {
+						_ = os.Setenv("ALLOWED_ORIGINS", previous)
+					} else {
+						_ = os.Unsetenv("ALLOWED_ORIGINS")
+					}
+				})
+			} else {
+				t.Setenv("ALLOWED_ORIGINS", *tt.env)
+			}
+
+			got := getAllowedOrigins()
+
+			if len(got) != len(tt.want) {
+				t.Fatalf("expected %d origins, got %d: %v", len(tt.want), len(got), got)
+			}
+			for i := range tt.want {
+				if got[i] != tt.want[i] {
+					t.Fatalf("origin %d mismatch: got %q, want %q", i, got[i], tt.want[i])
+				}
+			}
+		})
+	}
+}
+
+func stringPtr(value string) *string {
+	return &value
 }

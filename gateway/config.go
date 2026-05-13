@@ -1,6 +1,32 @@
 package main
 
-import "time"
+import (
+	"os"
+	"strings"
+	"time"
+)
+
+var defaultAllowedOrigins = []string{"http://localhost:3001"}
+
+func getAllowedOrigins() []string {
+	raw := strings.TrimSpace(os.Getenv("ALLOWED_ORIGINS"))
+	if raw == "" {
+		return defaultAllowedOrigins
+	}
+
+	origins := make([]string, 0)
+	for _, entry := range strings.Split(raw, ",") {
+		origin := strings.TrimSpace(entry)
+		if origin != "" {
+			origins = append(origins, origin)
+		}
+	}
+	if len(origins) == 0 {
+		return defaultAllowedOrigins
+	}
+
+	return origins
+}
 
 // getPositiveTimeout returns the configured timeout in seconds, but ensures a
 // sensible default if the provided value is non-positive.
