@@ -1,6 +1,9 @@
 app = "<verifier-app>"
 primary_region = "bom"
 
+# Keep this app at one Machine until replay nonce storage is moved out of process.
+# Multi-replica verifier deployments need a shared nonce store such as Redis.
+
 [build]
   dockerfile = "Dockerfile"
 

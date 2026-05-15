@@ -11,6 +11,8 @@ Phase 3 prepares deployment files and operator instructions only. Do not run the
 
 The verifier stays private because the gateway is the only public caller. Keeping verifier traffic on Fly internal DNS reduces the exposed cryptographic verification surface.
 
+Keep the verifier at one Machine until replay nonce storage is moved to a shared store such as Redis. The current verifier uses in-process nonce replay protection.
+
 ## Prerequisites
 
 - Fly CLI authenticated with access to the target org
@@ -69,6 +71,15 @@ fly secrets set -a <gateway-app> \
   ALLOWED_ORIGINS=https://<your-vercel-app>.vercel.app
 ```
 
+`OPENROUTER_MODEL` is a non-secret model selection. The value above is the default demo model; replace it if you choose a different OpenRouter model.
+
+If you later enable `RATE_LIMIT_ENABLED=true` on Fly, configure trusted Fly proxy CIDRs first so IP-based rate limiting uses real client IPs instead of a shared proxy address:
+
+```sh
+fly secrets set -a <gateway-app> \
+  TRUSTED_PROXIES=<fly-proxy-cidr>
+```
+
 The verifier currently needs no secret material. Its non-secret defaults are committed in `deploy/fly/verifier.fly.toml`:
 
 ```sh
@@ -80,13 +91,14 @@ fly secrets list -a <verifier-app>
 Deploy verifier before gateway so the gateway can reach `http://<verifier-app>.internal:3002`.
 
 ```sh
-fly deploy ./verifier -c deploy/fly/verifier.fly.toml -a <verifier-app>
+(cd verifier && fly deploy -c ../deploy/fly/verifier.fly.toml -a <verifier-app>)
+fly scale count 1 -a <verifier-app>
 ```
 
 ## 6. Deploy Gateway
 
 ```sh
-fly deploy ./gateway -c deploy/fly/gateway.fly.toml -a <gateway-app>
+(cd gateway && fly deploy -c ../deploy/fly/gateway.fly.toml -a <gateway-app>)
 ```
 
 Fly should route public HTTPS traffic to the gateway app and use `GET /healthz` for stable liveness during cold starts. Use `/readyz` manually when checking dependency readiness because it also checks verifier, provider, and Redis reachability.
@@ -100,6 +112,8 @@ cd web
 vercel link
 vercel env add NEXT_PUBLIC_GATEWAY_URL production
 ```
+
+Run the CLI commands from `web/`. If you link from the repository root or configure the project in the Vercel dashboard, set the project root directory to `web`.
 
 When prompted, enter:
 
@@ -138,10 +152,17 @@ Then use the Vercel web app with a Base Sepolia wallet:
 5. Confirm the signed retry returns `200`.
 6. Capture the `X-402-Receipt` value from the response.
 
+Decode the receipt header before using it in the lookup endpoint. `X-402-Receipt` is base64-encoded signed receipt JSON; the lookup endpoint expects the embedded receipt ID.
+
+```sh
+RECEIPT_B64=<x-402-receipt-header-value>
+RECEIPT_ID=$(printf '%s' "$RECEIPT_B64" | python3 -c 'import base64,json,sys; print(json.loads(base64.b64decode(sys.stdin.read().strip()))["receipt"]["id"])')
+```
+
 Verify receipt persistence after a gateway restart or deploy:
 
 ```sh
-curl -i https://<gateway-app>.fly.dev/api/receipts/<receipt-id>
+curl -i https://<gateway-app>.fly.dev/api/receipts/$RECEIPT_ID
 ```
 
 The receipt should remain retrievable after the gateway Machine is restarted or a new gateway deploy completes, because production uses `RECEIPT_STORE=redis` backed by Upstash Redis.
