@@ -38,6 +38,8 @@ Update `app = "<gateway-app>"` in `deploy/fly/gateway.fly.toml`.
 Update `app = "<verifier-app>"` in `deploy/fly/verifier.fly.toml`.
 Update `VERIFIER_URL = "http://<verifier-app>.internal:3002"` in `deploy/fly/gateway.fly.toml`.
 
+Base Sepolia is the default chain for this deployment prep. For any other chain, update `CHAIN_ID` and `EXPECTED_CHAIN_ID` together in `.env.production.example`, `deploy/fly/gateway.fly.toml`, and `deploy/fly/verifier.fly.toml` so the gateway and verifier cannot drift.
+
 ## 2. Create Fly Apps
 
 Phase 3 does not run these commands. They are prepared for Phase 4.

@@ -82,7 +82,6 @@ services:
       - "3001:3001"
     environment:
       - PORT=3001
-      - NEXT_PUBLIC_GATEWAY_URL=http://localhost:3000
     depends_on:
       gateway:
         condition: service_healthy

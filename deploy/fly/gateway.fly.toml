@@ -1,4 +1,6 @@
 app = "<gateway-app>"
+# Demo default region is Mumbai. Change primary_region before deploy if another
+# Fly region is closer to the intended users.
 primary_region = "bom"
 
 [build]
