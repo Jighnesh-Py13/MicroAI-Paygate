@@ -80,8 +80,7 @@ Successful response:
 {
   "is_valid": true,
   "recovered_address": "0x...",
-  "error": "",
-  "error_code": ""
+  "error": null
 }
 ```
 
@@ -90,7 +89,7 @@ Business rejection response:
 ```json
 {
   "is_valid": false,
-  "recovered_address": "",
+  "recovered_address": null,
   "error": "human-readable verifier detail",
   "error_code": "invalid_signature"
 }

@@ -25,7 +25,7 @@ paths:
   /readyz:
     get:
       summary: Gateway readiness
-      description: Checks verifier reachability, AI provider availability, Redis when required, and gateway self metrics.
+      description: Checks verifier reachability, the active AI provider, Redis when required, and gateway self metrics.
       responses:
         "200":
           description: Gateway dependencies are ready.
@@ -279,6 +279,9 @@ components:
           additionalProperties: true
           example:
             verifier: ok
+            ai_provider:
+              provider: openrouter
+              status: ok
             openrouter: ok
             redis: ok
             gateway:

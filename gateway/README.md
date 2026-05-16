@@ -46,7 +46,7 @@ sequenceDiagram
 | Route | Purpose |
 | --- | --- |
 | `GET /healthz` | Liveness check for gateway process health. |
-| `GET /readyz` | Dependency readiness check for verifier, AI provider, Redis when required, and gateway self metrics. |
+| `GET /readyz` | Dependency readiness check for verifier, active AI provider, Redis when required, and gateway self metrics. |
 | `GET /openapi.yaml` | OpenAPI 3.1 contract for public gateway endpoints. |
 | `GET /docs` | Swagger UI backed by `openapi.yaml`. |
 | `POST /api/ai/summarize` | Payment-gated summarize endpoint. |
