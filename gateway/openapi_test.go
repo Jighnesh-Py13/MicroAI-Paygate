@@ -18,7 +18,9 @@ func TestOpenAPISpecMatchesRoutes(t *testing.T) {
 
 	expectedPaths := []string{
 		"/healthz",
+		"/readyz",
 		"/api/ai/summarize",
+		"/api/receipts/{id}",
 	}
 
 	for _, path := range expectedPaths {
