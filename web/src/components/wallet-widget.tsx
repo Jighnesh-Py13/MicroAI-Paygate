@@ -45,14 +45,42 @@ export function WalletWidget() {
 
   useEffect(() => {
     let mounted = true;
-
-    if (!hasWallet()) {
-      setState({ kind: "missing" });
-      return;
-    }
+    let unsubAcc: (() => void) | undefined;
+    let unsubChain: (() => void) | undefined;
 
     async function load() {
       try {
+        await Promise.resolve();
+        if (!mounted) return;
+
+        if (!hasWallet()) {
+          setState({ kind: "missing" });
+          return;
+        }
+
+        unsubAcc = subscribeAccountsChanged(async (accounts) => {
+          if (!accounts[0]) {
+            setState({ kind: "disconnected" });
+            return;
+          }
+          // Read the live chainId — otherwise an external connect lands us in
+          // `chainId: 0`, which is never a real EVM chain and triggers the
+          // wrong-chain CTA even when the wallet is already correct.
+          const chain = await getCurrentChainId();
+          setState((prev) =>
+            prev.kind === "connected"
+              ? { ...prev, address: accounts[0] }
+              : { kind: "connected", address: accounts[0], chainId: chain ?? 0 },
+          );
+        });
+
+        unsubChain = subscribeChainChanged((hex) => {
+          const chainId = parseInt(hex, 16);
+          setState((prev) =>
+            prev.kind === "connected" ? { ...prev, chainId } : prev,
+          );
+        });
+
         const [addr, chain] = await Promise.all([getCurrentAccount(), getCurrentChainId()]);
         if (!mounted) return;
         if (addr && chain != null) {
@@ -70,33 +98,10 @@ export function WalletWidget() {
     }
     void load();
 
-    const unsubAcc = subscribeAccountsChanged(async (accounts) => {
-      if (!accounts[0]) {
-        setState({ kind: "disconnected" });
-        return;
-      }
-      // Read the live chainId — otherwise an external connect lands us in
-      // `chainId: 0`, which is never a real EVM chain and triggers the
-      // wrong-chain CTA even when the wallet is already correct.
-      const chain = await getCurrentChainId();
-      setState((prev) =>
-        prev.kind === "connected"
-          ? { ...prev, address: accounts[0] }
-          : { kind: "connected", address: accounts[0], chainId: chain ?? 0 },
-      );
-    });
-
-    const unsubChain = subscribeChainChanged((hex) => {
-      const chainId = parseInt(hex, 16);
-      setState((prev) =>
-        prev.kind === "connected" ? { ...prev, chainId } : prev,
-      );
-    });
-
     return () => {
       mounted = false;
-      unsubAcc();
-      unsubChain();
+      unsubAcc?.();
+      unsubChain?.();
     };
   }, []);
 
