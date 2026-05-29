@@ -31,6 +31,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/joho/godotenv"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 type PaymentContext struct {
@@ -284,11 +285,21 @@ func main() {
 	// including those rejected by later middleware, carries an ID for tracing.
 	r.Use(CorrelationIDMiddleware())
 
+	metricsPath := getMetricsPath()
+
+	if getMetricsEnabled() {
+		if err := validateMetricsPath(metricsPath); err != nil {
+			log.Fatalf("Invalid metrics configuration: %v", err)
+		}
+		r.Use(MetricsMiddleware())
+		r.GET(metricsPath, gin.WrapH(promhttp.Handler()))
+	}
+
 	// Configure GZIP compression for API responses
 	// - Uses DefaultCompression for balance between speed and size
 	// - Excludes /metrics endpoint (if added in future)
 	// - Compression is transparent to receipt verification (hashes uncompressed body)
-	r.Use(gzip.Gzip(gzip.DefaultCompression, gzip.WithExcludedPaths([]string{"/metrics"})))
+	r.Use(gzip.Gzip(gzip.DefaultCompression, gzip.WithExcludedPaths([]string{metricsPath})))
 
 	// Initialize Redis early to fail-fast if Redis required but unavailable
 	if err := initRedis(); err != nil {
@@ -433,6 +444,8 @@ func handleSummarize(c *gin.Context) {
 	// Verify
 	verifyResp, paymentCtx, err := verifyPayment(c.Request.Context(), signature, nonce, uint64(timestampValue))
 	if err != nil {
+		verificationTotal.WithLabelValues("error").Inc()
+
 		if errors.Is(err, context.DeadlineExceeded) {
 			respondError(c, 504, "verifier_timeout", err)
 		} else {
@@ -442,13 +455,18 @@ func handleSummarize(c *gin.Context) {
 	}
 
 	if !verifyResp.IsValid {
+		verificationTotal.WithLabelValues("invalid").Inc()
+
 		respondVerificationFailure(c, verifyResp)
 		return
 	}
 	if verifyResp.RecoveredAddress == "" {
+		verificationTotal.WithLabelValues("error").Inc()
 		respondError(c, 502, "verification_unavailable", fmt.Errorf("verifier success missing recovered_address"))
 		return
 	}
+
+	verificationTotal.WithLabelValues("success").Inc()
 
 	// 2. Parse Request
 	var req SummarizeRequest
@@ -676,6 +694,13 @@ func RateLimitMiddleware(limiters map[string]RateLimiter) gin.HandlerFunc {
 		// Check if request is allowed
 		if !limiter.Allow(key) {
 			retryAfter := calculateRetryAfter(limiter, key)
+
+			routePath := c.FullPath()
+			if routePath == "" {
+				routePath = "unknown"
+			}
+			rateLimitHits.WithLabelValues(routePath).Inc()
+
 			c.Header("Retry-After", strconv.Itoa(retryAfter))
 			c.Header("X-RateLimit-Limit", strconv.Itoa(getLimitForTier(tier)))
 			c.Header("X-RateLimit-Remaining", "0")
