@@ -123,6 +123,7 @@ Returns Prometheus text-format metrics for verifier request volume, verification
 | `VERIFIER_NONCE_STORE` | `memory` | Use `memory` locally/tests or `redis` for shared multi-replica replay protection. |
 | `REDIS_URL` | unset | Required when `VERIFIER_NONCE_STORE=redis`; accepts `host:port`, `redis://...`, or `rediss://...`. |
 | `VERIFIER_NONCE_KEY_PREFIX` | `microai:verifier:nonce:` | Redis key prefix for accepted nonce hashes. |
+| `VERIFIER_REDIS_TIMEOUT_MS` | `2000` | Redis nonce-store connection and claim timeout in milliseconds. |
 
 ## Replay Protection
 

@@ -172,7 +172,15 @@ fn get_redis_nonce_key_prefix() -> String {
 }
 
 fn redis_nonce_timeout() -> Duration {
-    Duration::from_secs(2)
+    const DEFAULT_REDIS_TIMEOUT_MS: u64 = 2_000;
+
+    let timeout_ms = env::var("VERIFIER_REDIS_TIMEOUT_MS")
+        .ok()
+        .and_then(|value| value.trim().parse::<u64>().ok())
+        .filter(|value| *value > 0)
+        .unwrap_or(DEFAULT_REDIS_TIMEOUT_MS);
+
+    Duration::from_millis(timeout_ms)
 }
 
 fn build_nonce_store_from_env() -> Result<Arc<NonceStore>, String> {
@@ -776,12 +784,14 @@ mod tests {
         nonce_store: Option<&str>,
         redis_url: Option<&str>,
         key_prefix: Option<&str>,
+        redis_timeout_ms: Option<&str>,
         test: impl FnOnce(),
     ) {
         let _guard = ENV_LOCK.lock().unwrap();
         let old_nonce_store = env::var("VERIFIER_NONCE_STORE").ok();
         let old_redis_url = env::var("REDIS_URL").ok();
         let old_key_prefix = env::var("VERIFIER_NONCE_KEY_PREFIX").ok();
+        let old_redis_timeout_ms = env::var("VERIFIER_REDIS_TIMEOUT_MS").ok();
 
         match nonce_store {
             Some(value) => env::set_var("VERIFIER_NONCE_STORE", value),
@@ -794,6 +804,10 @@ mod tests {
         match key_prefix {
             Some(value) => env::set_var("VERIFIER_NONCE_KEY_PREFIX", value),
             None => env::remove_var("VERIFIER_NONCE_KEY_PREFIX"),
+        }
+        match redis_timeout_ms {
+            Some(value) => env::set_var("VERIFIER_REDIS_TIMEOUT_MS", value),
+            None => env::remove_var("VERIFIER_REDIS_TIMEOUT_MS"),
         }
 
         test();
@@ -809,6 +823,10 @@ mod tests {
         match old_key_prefix {
             Some(value) => env::set_var("VERIFIER_NONCE_KEY_PREFIX", value),
             None => env::remove_var("VERIFIER_NONCE_KEY_PREFIX"),
+        }
+        match old_redis_timeout_ms {
+            Some(value) => env::set_var("VERIFIER_REDIS_TIMEOUT_MS", value),
+            None => env::remove_var("VERIFIER_REDIS_TIMEOUT_MS"),
         }
     }
 
@@ -855,7 +873,7 @@ mod tests {
 
     #[test]
     fn test_build_nonce_store_defaults_to_memory() {
-        with_nonce_env(None, None, None, || {
+        with_nonce_env(None, None, None, None, || {
             let store = build_nonce_store_from_env().unwrap();
             assert!(matches!(store.as_ref(), NonceStore::Memory(_)));
         });
@@ -863,12 +881,36 @@ mod tests {
 
     #[test]
     fn test_build_redis_nonce_store_requires_redis_url() {
-        with_nonce_env(Some("redis"), None, None, || {
+        with_nonce_env(Some("redis"), None, None, None, || {
             let err = match build_nonce_store_from_env() {
                 Ok(_) => panic!("expected REDIS_URL error"),
                 Err(err) => err,
             };
             assert!(err.contains("REDIS_URL"));
+        });
+    }
+
+    #[test]
+    fn test_redis_nonce_timeout_defaults_to_two_seconds() {
+        with_nonce_env(None, None, None, None, || {
+            assert_eq!(redis_nonce_timeout(), Duration::from_millis(2_000));
+        });
+    }
+
+    #[test]
+    fn test_redis_nonce_timeout_uses_env_milliseconds() {
+        with_nonce_env(None, None, None, Some("750"), || {
+            assert_eq!(redis_nonce_timeout(), Duration::from_millis(750));
+        });
+    }
+
+    #[test]
+    fn test_redis_nonce_timeout_rejects_invalid_env() {
+        with_nonce_env(None, None, None, Some("not-a-number"), || {
+            assert_eq!(redis_nonce_timeout(), Duration::from_millis(2_000));
+        });
+        with_nonce_env(None, None, None, Some("0"), || {
+            assert_eq!(redis_nonce_timeout(), Duration::from_millis(2_000));
         });
     }
 

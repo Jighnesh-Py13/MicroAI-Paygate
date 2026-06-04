@@ -328,6 +328,7 @@ Core local variables live in [.env.example](.env.example). Production placeholde
 | `SIGNATURE_CLOCK_SKEW_SECONDS` | Verifier | Future timestamp grace. Default `60`. |
 | `VERIFIER_NONCE_STORE` | Verifier | `memory` by default for local/tests, `redis` for shared multi-replica nonce replay protection. |
 | `VERIFIER_NONCE_KEY_PREFIX` | Verifier | Redis key prefix for verifier nonce hashes. Default `microai:verifier:nonce:`. |
+| `VERIFIER_REDIS_TIMEOUT_MS` | Verifier | Redis nonce-store connection and claim timeout in milliseconds. Default `2000`. |
 | `RECEIPT_STORE` | Gateway | `redis` by default, `memory` for tests/local experiments. |
 | `REDIS_URL` | Gateway/Verifier | Required when `RECEIPT_STORE=redis`, `CACHE_ENABLED=true`, or `VERIFIER_NONCE_STORE=redis`. |
 | `VERIFIER_URL` | Gateway | **Required.** Where the gateway calls `/verify` (e.g. `http://127.0.0.1:3002` for `bun run stack`, `https://<app>.onrender.com` for Render). The gateway refuses to start if unset — no silent loopback fallback. |
