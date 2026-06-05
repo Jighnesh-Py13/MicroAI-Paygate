@@ -27,11 +27,68 @@ jobs:
             const repo = context.repo.repo;
             const issue = context.payload.issue;
 
-            const triageLabel = {
-              name: 'triage',
-              color: 'd876e3',
-              description: 'Needs maintainer triage.',
-            };
+            const managedLabels = [
+              {
+                name: 'triage',
+                color: 'd876e3',
+                description: 'Needs maintainer triage.',
+              },
+              {
+                name: 'bug',
+                color: 'd73a4a',
+                description: 'Something is not working.',
+              },
+              {
+                name: 'type:bug',
+                color: 'd73a4a',
+                description: 'Bug report or bug fix work.',
+              },
+              {
+                name: 'enhancement',
+                color: 'a2eeef',
+                description: 'New feature or request.',
+              },
+              {
+                name: 'type:feature',
+                color: 'a2eeef',
+                description: 'Feature request or feature work.',
+              },
+              {
+                name: 'documentation',
+                color: '0075ca',
+                description: 'Documentation updates.',
+              },
+              {
+                name: 'type:docs',
+                color: '0075ca',
+                description: 'Documentation-related work.',
+              },
+              {
+                name: 'type:devops',
+                color: '5319e7',
+                description: 'CI, deployment, or automation work.',
+              },
+              {
+                name: 'go',
+                color: '00ADD8',
+                description: 'Touches Go gateway code.',
+              },
+              {
+                name: 'rust',
+                color: 'DEA584',
+                description: 'Touches Rust verifier code.',
+              },
+              {
+                name: 'TypeScript',
+                color: '3178C6',
+                description: 'Touches TypeScript or frontend code.',
+              },
+              {
+                name: 'type:testing',
+                color: 'FBCA04',
+                description: 'Testing-related work.',
+              },
+            ];
 
             const existingLabels = new Set(
               (
@@ -65,6 +122,12 @@ jobs:
               existingLabels.add(label.name);
             }
 
+            async function ensureLabels(labels) {
+              for (const label of labels) {
+                await ensureLabel(label);
+              }
+            }
+
             async function addLabels(labels) {
               const filtered = [...new Set(labels)].filter((label) =>
                 existingLabels.has(label),
@@ -82,12 +145,20 @@ jobs:
             }
 
             async function assignUser(login) {
-              await github.rest.issues.addAssignees({
-                owner,
-                repo,
-                issue_number: issue.number,
-                assignees: [login],
-              });
+              try {
+                await github.rest.issues.addAssignees({
+                  owner,
+                  repo,
+                  issue_number: issue.number,
+                  assignees: [login],
+                });
+                return true;
+              } catch (error) {
+                if (error.status === 403 || error.status === 422) {
+                  return false;
+                }
+                throw error;
+              }
             }
 
             async function comment(body) {
@@ -99,15 +170,26 @@ jobs:
               });
             }
 
-            function hasAssignee(login) {
-              return issue.assignees.some((assignee) => assignee.login === login);
+            async function fetchIssueState() {
+              const { data } = await github.rest.issues.get({
+                owner,
+                repo,
+                issue_number: issue.number,
+              });
+              return data;
             }
 
-            function currentAssignees() {
-              return issue.assignees.map((assignee) => assignee.login);
+            function hasAssignee(issueState, login) {
+              return issueState.assignees.some(
+                (assignee) => assignee.login === login,
+              );
             }
 
-            await ensureLabel(triageLabel);
+            function currentAssignees(issueState) {
+              return issueState.assignees.map((assignee) => assignee.login);
+            }
+
+            await ensureLabels(managedLabels);
 
             if (context.eventName === 'issues') {
               const title = issue.title || '';
@@ -183,10 +265,13 @@ jobs:
                   body,
                 );
 
-              if (requestedSelfAssign && issue.assignees.length === 0) {
-                await assignUser(issue.user.login);
+              const currentIssue = await fetchIssueState();
+              if (requestedSelfAssign && currentIssue.assignees.length === 0) {
+                const assigned = await assignUser(issue.user.login);
                 await comment(
-                  `Assigned @${issue.user.login} based on the issue request.`,
+                  assigned
+                    ? `Assigned @${issue.user.login} based on the issue request.`
+                    : `GitHub did not allow assigning @${issue.user.login} automatically. A maintainer will need to assign this issue manually.`,
                 );
               }
 
@@ -208,11 +293,12 @@ jobs:
             }
 
             const commenter = issueComment.user.login;
-            if (hasAssignee(commenter)) {
+            const currentIssue = await fetchIssueState();
+            if (hasAssignee(currentIssue, commenter)) {
               return;
             }
 
-            const assignees = currentAssignees();
+            const assignees = currentAssignees(currentIssue);
             if (assignees.length > 0) {
               await comment(
                 `@${commenter} this issue is already assigned to ${assignees
@@ -222,5 +308,9 @@ jobs:
               return;
             }
 
-            await assignUser(commenter);
-            await comment(`Assigned @${commenter}.`);
+            const assigned = await assignUser(commenter);
+            await comment(
+              assigned
+                ? `Assigned @${commenter}.`
+                : `@${commenter} GitHub did not allow automatic assignment. A maintainer will need to assign this issue manually.`,
+            );
