@@ -616,3 +616,17 @@ func TestHandleReadyz_RedisUnreachable(t *testing.T) {
 	checks := response["checks"].(map[string]interface{})
 	require.Equal(t, "unreachable", checks["redis"])
 }
+func TestHandleGetReceipt_InvalidID(t *testing.T) {
+    w := httptest.NewRecorder()
+    c, _ := gin.CreateTestContext(w)
+
+    c.Params = gin.Params{
+        gin.Param{Key: "id", Value: "foo"},
+    }
+
+    handleGetReceipt(c)
+
+    if w.Code != 400 {
+        t.Fatalf("expected 400, got %d", w.Code)
+    }
+}

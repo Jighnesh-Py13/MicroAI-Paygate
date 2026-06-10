@@ -922,26 +922,59 @@ func getReceiptTTL() time.Duration {
 	}
 	return time.Duration(ttlSeconds) * time.Second
 }
+func isValidReceiptID(id string) bool {
+	if id == "" {
+		return false
+	}
+
+	if !strings.HasPrefix(id, "rcpt_") {
+		return false
+	}
+
+	// must have payload after prefix
+	if len(id) <= len("rcpt_") {
+		return false
+	}
+
+	// safety limit (prevents abuse / huge input strings)
+	if len(id) > 128 {
+		return false
+	}
+
+	return true
+}
 
 // handleGetReceipt handles GET /api/receipts/:id
 func handleGetReceipt(c *gin.Context) {
 	id := c.Param("id")
 
+	// Reject malformed IDs early (no store hit)
+	if !isValidReceiptID(id) {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "invalid receipt id format",
+			"message": "receipt id must start with rcpt_ and contain an id",
+		})
+		return
+	}
+
 	receipt, exists, err := getReceiptWithContext(c.Request.Context(), id)
 	if err != nil {
 		log.Printf("Failed to retrieve receipt %s: %v", id, err)
-		c.JSON(500, gin.H{"error": "Failed to retrieve receipt"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "failed to retrieve receipt",
+		})
 		return
 	}
+
 	if !exists {
-		c.JSON(404, gin.H{
+		c.JSON(http.StatusNotFound, gin.H{
 			"error":   "Receipt not found",
 			"message": "Receipt may have expired or never existed",
 		})
 		return
 	}
 
-	c.JSON(200, gin.H{
+	c.JSON(http.StatusOK, gin.H{
 		"receipt":           receipt.Receipt,
 		"signature":         receipt.Signature,
 		"server_public_key": receipt.ServerPublicKey,
