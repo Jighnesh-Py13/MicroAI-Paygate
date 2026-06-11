@@ -275,7 +275,7 @@ paths:
                 properties:
                   error:
                     type: string
-                    example: Failed to retrieve receipt
+                    example: failed to retrieve receipt
 
 components:
   schemas:

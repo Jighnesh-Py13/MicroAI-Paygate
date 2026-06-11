@@ -19,6 +19,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -923,25 +924,8 @@ func getReceiptTTL() time.Duration {
 	return time.Duration(ttlSeconds) * time.Second
 }
 func isValidReceiptID(id string) bool {
-	if id == "" {
-		return false
-	}
-
-	if !strings.HasPrefix(id, "rcpt_") {
-		return false
-	}
-
-	// must have payload after prefix
-	if len(id) <= len("rcpt_") {
-		return false
-	}
-
-	// safety limit (prevents abuse / huge input strings)
-	if len(id) > 128 {
-		return false
-	}
-
-	return true
+	matched, _ := regexp.MatchString(`^rcpt_[a-f0-9]{12}$`, id)
+	return matched
 }
 
 // handleGetReceipt handles GET /api/receipts/:id
