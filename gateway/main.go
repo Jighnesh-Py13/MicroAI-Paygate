@@ -62,6 +62,8 @@ type SummarizeRequest struct {
 	Text string `json:"text"`
 }
 
+var receiptIDPattern = regexp.MustCompile(`^rcpt_[a-f0-9]{12}$`)
+
 // validateConfig validates all required environment variables at startup.
 // It checks for OPENROUTER_API_KEY, SERVER_WALLET_PRIVATE_KEY, and conditionally REDIS_URL.
 // Returns an error listing all missing variables if any are not set.
@@ -924,8 +926,7 @@ func getReceiptTTL() time.Duration {
 	return time.Duration(ttlSeconds) * time.Second
 }
 func isValidReceiptID(id string) bool {
-	matched, _ := regexp.MatchString(`^rcpt_[a-f0-9]{12}$`, id)
-	return matched
+	return receiptIDPattern.MatchString(id)
 }
 
 // handleGetReceipt handles GET /api/receipts/:id
@@ -936,7 +937,7 @@ func handleGetReceipt(c *gin.Context) {
 	if !isValidReceiptID(id) {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error":   "invalid receipt id format",
-			"message": "receipt id must start with rcpt_ and contain an id",
+			"message": "receipt id must start with rcpt_ followed by exactly 12 lowercase hexadecimal characters",
 		})
 		return
 	}

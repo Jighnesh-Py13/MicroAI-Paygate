@@ -616,17 +616,28 @@ func TestHandleReadyz_RedisUnreachable(t *testing.T) {
 	checks := response["checks"].(map[string]interface{})
 	require.Equal(t, "unreachable", checks["redis"])
 }
-func TestHandleGetReceipt_InvalidID(t *testing.T) {
-    w := httptest.NewRecorder()
-    c, _ := gin.CreateTestContext(w)
 
-    c.Params = gin.Params{
-        gin.Param{Key: "id", Value: "foo"},
-    }
+func TestIsValidReceiptID(t *testing.T) {
+	tests := []struct {
+		name string
+		id   string
+		want bool
+	}{
+		{"empty", "", false},
+		{"prefix only", "rcpt_", false},
+		{"short", "rcpt_123", false},
+		{"long", "rcpt_1234567890abcdef", false},
+		{"uppercase", "rcpt_ABCDEF123456", false},
+		{"non hex", "rcpt_nothex12345", false},
+		{"wrong prefix", "foo", false},
+		{"valid", "rcpt_abcdef123456", true},
+	}
 
-    handleGetReceipt(c)
-
-    if w.Code != 400 {
-        t.Fatalf("expected 400, got %d", w.Code)
-    }
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isValidReceiptID(tt.id); got != tt.want {
+				t.Errorf("isValidReceiptID(%q) = %v, want %v", tt.id, got, tt.want)
+			}
+		})
+	}
 }

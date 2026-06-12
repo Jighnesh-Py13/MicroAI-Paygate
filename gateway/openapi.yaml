@@ -252,7 +252,7 @@ paths:
                     example: invalid receipt id format
                   message:
                     type: string
-                    example: receipt id must start with rcpt_ and contain an id
+                    example: receipt id must start with rcpt_ followed by exactly 12 lowercase hexadecimal characters
         "404":
           description: Receipt expired or never existed.
           content:
