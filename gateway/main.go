@@ -857,11 +857,8 @@ func validateReceipt(receipt *SignedReceipt) error {
 	}
 
 	// Validate receipt fields
-	if receipt.Receipt.ID == "" {
-		return fmt.Errorf("receipt ID is empty")
-	}
-	if !strings.HasPrefix(receipt.Receipt.ID, "rcpt_") {
-		return fmt.Errorf("receipt ID must start with 'rcpt_'")
+	if !isValidReceiptID(receipt.Receipt.ID) {
+		return fmt.Errorf("invalid receipt ID format")
 	}
 	if receipt.Receipt.Version == "" {
 		return fmt.Errorf("receipt version is empty")

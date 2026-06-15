@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -9,10 +10,33 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+type spyReceiptStore struct {
+	getCalls int
+}
+
+func (s *spyReceiptStore) Store(ctx context.Context, receipt *SignedReceipt, ttl time.Duration) error {
+	return nil
+}
+
+func (s *spyReceiptStore) Get(ctx context.Context, id string) (*SignedReceipt, bool, error) {
+	s.getCalls++
+	return nil, false, nil
+}
+
+func (s *spyReceiptStore) CleanupExpired(ctx context.Context) error {
+	return nil
+}
+
+func (s *spyReceiptStore) Close() error {
+	return nil
+}
 
 func TestHandleSummarize_NoHeaders(t *testing.T) {
 	// Setup
@@ -640,4 +664,23 @@ func TestIsValidReceiptID(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestHandleGetReceipt_InvalidID_DoesNotHitStore(t *testing.T) {
+	spy := &spyReceiptStore{}
+
+	oldStore := getActiveReceiptStore()
+	setActiveReceiptStore(spy)
+	defer setActiveReceiptStore(oldStore)
+
+	router := gin.New()
+	router.GET("/api/receipts/:id", handleGetReceipt)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/receipts/foo", nil)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Equal(t, 0, spy.getCalls)
 }
