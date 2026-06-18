@@ -119,6 +119,8 @@ Returns Prometheus text-format metrics for verifier request volume, verification
 | `EXPECTED_CHAIN_ID` | `84532` | Preferred chain ID enforcement variable. |
 | `CHAIN_ID` | unset | Fallback when `EXPECTED_CHAIN_ID` is unset. |
 | `SIGNATURE_EXPIRY_SECONDS` | `300` | Signature freshness window and nonce retention TTL. |
+| `PORT` | `3002` | Listen port for the verifier service. Invalid values fall back to `3002` with a warning. |
+| `BIND_ADDRESS` | `0.0.0.0` | Network interface/address the verifier binds to. Invalid values fall back to `0.0.0.0` with a warning. |
 | `SIGNATURE_CLOCK_SKEW_SECONDS` | `60` | Allowed future timestamp skew. |
 | `VERIFIER_NONCE_STORE` | `memory` | Use `memory` locally/tests or `redis` for shared multi-replica replay protection. |
 | `REDIS_URL` | unset | Required when `VERIFIER_NONCE_STORE=redis`; accepts `host:port`, `redis://...`, or `rediss://...`. |
@@ -141,7 +143,7 @@ cd verifier
 cargo run
 ```
 
-The service listens on `0.0.0.0:3002` by default.
+The service listens on `0.0.0.0:3002` by default. Override the bind address and port with `BIND_ADDRESS` and `PORT`.
 
 ## Metrics
 
