@@ -1202,6 +1202,51 @@ mod tests {
         });
     }
 
+    #[test]
+    fn test_get_bind_address_defaults_when_unset() {
+        let _guard = ENV_LOCK.lock().unwrap();
+
+        let old = env::var("BIND_ADDRESS").ok();
+        env::remove_var("BIND_ADDRESS");
+
+        assert_eq!(get_bind_address().to_string(), "0.0.0.0");
+
+        match old {
+            Some(v) => env::set_var("BIND_ADDRESS", v),
+            None => env::remove_var("BIND_ADDRESS"),
+        }
+    }
+
+    #[test]
+    fn test_get_bind_address_reads_valid_address() {
+        let _guard = ENV_LOCK.lock().unwrap();
+
+        let old = env::var("BIND_ADDRESS").ok();
+        env::set_var("BIND_ADDRESS", "127.0.0.1");
+
+        assert_eq!(get_bind_address().to_string(), "127.0.0.1");
+
+        match old {
+            Some(v) => env::set_var("BIND_ADDRESS", v),
+            None => env::remove_var("BIND_ADDRESS"),
+        }
+    }
+
+    #[test]
+    fn test_get_bind_address_falls_back_on_invalid_value() {
+        let _guard = ENV_LOCK.lock().unwrap();
+
+        let old = env::var("BIND_ADDRESS").ok();
+        env::set_var("BIND_ADDRESS", "not-an-ip");
+
+        assert_eq!(get_bind_address().to_string(), "0.0.0.0");
+
+        match old {
+            Some(v) => env::set_var("BIND_ADDRESS", v),
+            None => env::remove_var("BIND_ADDRESS"),
+        }
+    }
+
     #[tokio::test]
     async fn test_verify_signature_valid() {
         let wallet: LocalWallet =
