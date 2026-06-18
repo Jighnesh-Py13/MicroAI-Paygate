@@ -156,17 +156,13 @@ fn get_port() -> u16 {
         Ok(v) => match v.parse::<u16>() {
             Ok(port) if port > 0 => port,
             Ok(_) => {
-                eprintln!(
-                    "Warning: PORT must be > 0, using default {}",
-                    DEFAULT_PORT
-                );
+                eprintln!("Warning: PORT must be > 0, using default {}", DEFAULT_PORT);
                 DEFAULT_PORT
             }
             Err(_) => {
                 eprintln!(
                     "Warning: Invalid PORT '{}', using default {}",
-                    v,
-                    DEFAULT_PORT
+                    v, DEFAULT_PORT
                 );
                 DEFAULT_PORT
             }
@@ -182,8 +178,7 @@ fn get_bind_address() -> IpAddr {
             Err(_) => {
                 eprintln!(
                     "Warning: Invalid BIND_ADDRESS '{}', using default {}",
-                    v,
-                    DEFAULT_BIND_ADDRESS
+                    v, DEFAULT_BIND_ADDRESS
                 );
                 DEFAULT_BIND_ADDRESS.parse().unwrap()
             }
@@ -318,10 +313,7 @@ async fn main() {
         .layer(DefaultBodyLimit::max(limit))
         .with_state(state);
 
-    let addr = SocketAddr::new(
-        get_bind_address(),
-        get_port(),
-    );
+    let addr = SocketAddr::new(get_bind_address(), get_port());
     println!("Rust Verifier listening on {}", addr);
 
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
