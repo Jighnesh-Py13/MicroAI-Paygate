@@ -246,6 +246,7 @@ paths:
             application/json:
               schema:
                 type: object
+                required: [error, message]
                 properties:
                   error:
                     type: string

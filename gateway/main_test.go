@@ -13,12 +13,15 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 type spyReceiptStore struct {
 	getCalls int
+	lastID   string
+	receipt  *SignedReceipt
+	exists   bool
+	err      error
 }
 
 func (s *spyReceiptStore) Store(ctx context.Context, receipt *SignedReceipt, ttl time.Duration) error {
@@ -27,7 +30,8 @@ func (s *spyReceiptStore) Store(ctx context.Context, receipt *SignedReceipt, ttl
 
 func (s *spyReceiptStore) Get(ctx context.Context, id string) (*SignedReceipt, bool, error) {
 	s.getCalls++
-	return nil, false, nil
+	s.lastID = id
+	return s.receipt, s.exists, s.err
 }
 
 func (s *spyReceiptStore) CleanupExpired(ctx context.Context) error {
@@ -666,21 +670,86 @@ func TestIsValidReceiptID(t *testing.T) {
 	}
 }
 
-func TestHandleGetReceipt_InvalidID_DoesNotHitStore(t *testing.T) {
-	spy := &spyReceiptStore{}
+func TestHandleGetReceipt_ValidationAndLookupPaths(t *testing.T) {
+	tests := []struct {
+		name             string
+		useRouter        bool
+		id               string
+		expectedStatus   int
+		expectedBody     map[string]string
+		expectedGetCalls int
+	}{
+		{
+			name:           "empty id",
+			id:             "",
+			expectedStatus: http.StatusBadRequest,
+			expectedBody: map[string]string{
+				"error":   "invalid receipt id format",
+				"message": "receipt id must start with rcpt_ followed by exactly 12 lowercase hexadecimal characters",
+			},
+			expectedGetCalls: 0,
+		},
+		{
+			name:           "prefix only",
+			id:             "rcpt_",
+			expectedStatus: http.StatusBadRequest,
+			expectedBody: map[string]string{
+				"error":   "invalid receipt id format",
+				"message": "receipt id must start with rcpt_ followed by exactly 12 lowercase hexadecimal characters",
+			},
+			expectedGetCalls: 0,
+		},
+		{
+			name:           "malformed id",
+			useRouter:      true,
+			id:             "foo",
+			expectedStatus: http.StatusBadRequest,
+			expectedBody: map[string]string{
+				"error":   "invalid receipt id format",
+				"message": "receipt id must start with rcpt_ followed by exactly 12 lowercase hexadecimal characters",
+			},
+			expectedGetCalls: 0,
+		},
+		{
+			name:           "well formed but missing",
+			useRouter:      true,
+			id:             "rcpt_a1b2c3d4e5f6",
+			expectedStatus: http.StatusNotFound,
+			expectedBody: map[string]string{
+				"error":   "Receipt not found",
+				"message": "Receipt may have expired or never existed",
+			},
+			expectedGetCalls: 1,
+		},
+	}
 
-	oldStore := getActiveReceiptStore()
-	setActiveReceiptStore(spy)
-	defer setActiveReceiptStore(oldStore)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			spy := &spyReceiptStore{}
 
-	router := gin.New()
-	router.GET("/api/receipts/:id", handleGetReceipt)
+			oldStore := getActiveReceiptStore()
+			setActiveReceiptStore(spy)
+			defer setActiveReceiptStore(oldStore)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/receipts/foo", nil)
-	w := httptest.NewRecorder()
+			w := httptest.NewRecorder()
 
-	router.ServeHTTP(w, req)
+			if tt.useRouter {
+				router := gin.New()
+				router.GET("/api/receipts/:id", handleGetReceipt)
+				req := httptest.NewRequest(http.MethodGet, "/api/receipts/"+tt.id, nil)
+				router.ServeHTTP(w, req)
+			} else {
+				c, _ := gin.CreateTestContext(w)
+				c.Params = gin.Params{gin.Param{Key: "id", Value: tt.id}}
+				handleGetReceipt(c)
+			}
 
-	assert.Equal(t, http.StatusBadRequest, w.Code)
-	assert.Equal(t, 0, spy.getCalls)
+			require.Equal(t, tt.expectedStatus, w.Code)
+			require.Equal(t, tt.expectedGetCalls, spy.getCalls)
+
+			var body map[string]string
+			require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
+			require.Equal(t, tt.expectedBody, body)
+		})
+	}
 }
