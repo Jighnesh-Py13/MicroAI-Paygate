@@ -147,7 +147,7 @@ The service listens on `0.0.0.0:3002` by default. Override the bind address and 
 
 ## Metrics
 
-The verifier exposes Prometheus metrics at `GET /metrics` on port `3002`.
+The verifier exposes Prometheus metrics at `GET /metrics` on the configured listener port. The default port is `3002`.
 
 Example local scrape config:
 
@@ -155,7 +155,7 @@ Example local scrape config:
 scrape_configs:
   - job_name: microai-verifier
     static_configs:
-      - targets: ["localhost:3002"]
+      - targets: ["localhost:<configured-port>"]
     metrics_path: /metrics
 ```
 
